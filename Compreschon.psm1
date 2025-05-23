@@ -4,10 +4,10 @@
 $baseModulePath = "$powershell\Modules\Compreschon"; $configPath = Join-Path $baseModulePath "Compreschon.psd1"
 if (!(Test-Path $configPath)) {throw "Config file not found at $configPath"}
 $config = Import-PowerShellDataFile -Path $configPath
-$minimumlength = $config.PrivateData.minimumlength; $dictionaryfile = $config.PrivateData.dictionaryfile
+$minimumlength = $config.PrivateData.minimumlength; $script:dictionaryfile = $config.PrivateData.dictionaryfile
 
 # Obtain default dictionary and clean it, if necessary.
-$dictionary = Get-Content -Path (Join-Path $baseModulePath $dictionaryfile) | ForEach-Object {($_ -replace '\W', '').Trim().ToLower()} | Where-Object {$_.Length -ge $minimumlength}
+$dictionary = Get-Content -Path (Join-Path $baseModulePath $script:dictionaryfile) | ForEach-Object {($_ -replace '\W', '').Trim().ToLower()} | Where-Object {$_.Length -ge $minimumlength}
 
 # ----------------------------- GetHelp -----------------------------
 
@@ -50,21 +50,27 @@ $result = ''
 while ($value -gt 0) {$result = $chars[$value % 36] + $result; $value = [math]::Floor($value / 36)}
 return $result}
 
-# Obtain input file content and replace true "#".
-$content = Get-Content -Raw -Path $inputFile; $content = $content -replace '#', '§'; $tokens = [regex]::Split($content, '(\b)')
-for ($i = 0; $i -lt $tokens.Length; $i++) {$token = $tokens[$i]
-# Full token/word matches.
+# Encrypt individual tokens helper function.
+function encrypt-token {param([string]$token)
 if ($token.Length -ge $minimumlength) {$fullIndex = $dictionary.IndexOf($token.ToLower())
-if ($fullIndex -ge 0) {$binMeta = Get-CasingMetadata $token; $metaInt = [Convert]::ToInt64($binMeta, 2); $meta36 = Convert-ToBase36 $metaInt; $index36 = Convert-ToBase36 $fullIndex; $tokens[$i] = "#$index36|$meta36¦"; Write-Host -f green "." -n}}
+if ($fullIndex -ge 0) {$binMeta = Get-CasingMetadata $token; $metaInt = [Convert]::ToInt64($binMeta, 2); $meta36 = Convert-ToBase36 $metaInt; $index36 = Convert-ToBase36 $fullIndex; Write-Host -f green "." -NoNewline; return "#$index36|$meta36¦"}}
 
-# Partial matches.
-else {$output = ''; $pos = 0; while ($pos -lt $token.Length) {$maxLen = 0; $maxIndex = -1
+# Fallback to partial matches
+$output = ''; $pos = 0
+while ($pos -lt $token.Length) {$maxLen = 0; $maxIndex = -1
 for ($j = 0; $j -lt $dictionary.Count; $j++) {$dictWord = $dictionary[$j]
 if ($pos + $dictWord.Length -le $token.Length) {$substr = $token.Substring($pos, $dictWord.Length)
 if ($substr.ToLower() -eq $dictWord) {if ($dictWord.Length -gt $maxLen) {$maxLen = $dictWord.Length; $maxIndex = $j}}}}
-if ($maxLen -gt 0) {$matched = $token.Substring($pos, $maxLen); $binMeta = Get-CasingMetadata $matched; $metaInt = [Convert]::ToInt64($binMeta, 2); $meta36 = Convert-ToBase36 $metaInt; $index36 = Convert-ToBase36 $maxIndex; $output += "#$index36|$meta36¦"; Write-Host -f green "." -n}
+
+if ($maxLen -gt 0) {$matched = $token.Substring($pos, $maxLen); $binMeta = Get-CasingMetadata $matched; $metaInt = [Convert]::ToInt64($binMeta, 2); $meta36 = Convert-ToBase36 $metaInt; $index36 = Convert-ToBase36 $maxIndex; $output += "#$index36|$meta36¦"; Write-Host -f green "." -NoNewline; $pos += $maxLen}
 else {$output += $token[$pos]; $pos++}}
-$tokens[$i] = $output}}
+return $output}
+
+# ----------------------------- Begin Main Compreschon Logic -----------------------------
+
+# Obtain input file content and replace true "#"
+$content = Get-Content -Raw -Path $inputFile; $content = $content -replace '#', '§'; $tokens = [regex]::Split($content, '(\b)')
+for ($i = 0; $i -lt $tokens.Length; $i++) {$tokens[$i] = encrypt-token $tokens[$i]}
 $compressedContent = ($tokens -join '')
 
 # Output
@@ -108,7 +114,7 @@ $content = $content -replace '§', '#'
 # Output.
 $outputFile = [System.IO.Path]::ChangeExtension($inputFile, $originalExtension); Set-Content -Path $outputFile -Value $content -Encoding UTF8; Write-Host -f cyan "`nDecompressed file saved to: " -n; Write-Host -f yellow "$outputFile`n"}
 
-# ----------------------------- Deicschonary -----------------------------
+# ----------------------------- Dicschonary -----------------------------
 
 function dicschonary {# Randomize a dictionary file in order to create a unique "pre-shared key" mechanism.
 param ([string]$inputFile, [string]$outputFile, [switch]$help)
@@ -116,7 +122,7 @@ param ([string]$inputFile, [string]$outputFile, [switch]$help)
 # Error-checking.
 if ($help) {gethelp; return}
 if (-not $inputFile -and -not $outputFile) {Write-Host -f red "`nUsage: dicschonary <inputFile> <outputFile>`nIf no inputFile is provided, the default dictionary will be used.`n"; return}
-if ($inputFile -and -not $outputFile) {$outputFile = $inputFile; $inputFile = Join-Path $baseModulePath $dictionaryfile}
+if ($inputFile -and -not $outputFile) {$outputFile = $inputFile; $inputFile = Join-Path $baseModulePath $script:dictionaryfile}
 if (-not (Test-Path $inputFile)) {Write-Host -f red "`nInput file not found: $inputFile`n"; return}
 
 # Read, shuffle, and write dictionary.
@@ -140,7 +146,7 @@ That being said, if you use this standard dictionary against a document that had
 
 ## How Does It Work?
 
-	Usage: (compresch/decompresch) <filename> <alternatedictionary> -help
+Usage: (compresch/decompresch) <filename> <alternatedictionary> -help
 
 When you submit a file for compreschon, the function looks for a matching word in the dictionary. Failing that, it looks for the longest matching string within the word against a word in the dictionary. So, words I mentioned earlier like "encrypted" may not be a direct match, but the first portion of that word would be a match. The function would then continue by replacing "encrypt" with the encrypted value and leave the last two letters untouched. 
 
@@ -151,18 +157,18 @@ Once the encryption of every word in the document is complete, the file will be 
 
 The module includes a .PSD1 file for configuration. In it there are only 2 lines you need to adjust, if you so choose:
 
-	@{ModuleVersion = '1.0'
-	RootModule = 'Compresch.psm1'
-	PrivateData = @{minimumlength = 4
-	dictionaryfile = 'Dictionary.schvn'}}
-	
+@{ModuleVersion = '1.0'
+RootModule = 'Compresch.psm1'
+PrivateData = @{minimumlength = 4
+dictionaryfile = 'Dictionary.schvn'}}
+
 The minimumlength value tells the compresch function the smallest words to replace with an indexed value. The default it set to 4. Smaller values will lead to encrypted files that are larger than their original and setting a larger value, while it will likely encrypt files faster, will lead to less encrypted content, which means that the resulting file may be easier to read, even without the dictionary. So, I wouldn't reccommend using values less than 4 or greater than 6.
 
 The dictionaryfile value is the name of your custom dictionary, which must be located in the same directory as the module in order for it to work properly.
 
 ## Dictionary Randomization/Pre-Shared Key Creation
 
-	Usage: dicschonary <inputfile> <outputfile>
+Usage: dicschonary <inputfile> <outputfile>
 
 I have also included a dictionary randomizer which allows you to take any dictionary and randomize the entries, thereby creating a unique version for your own use. If no input file is provided, the function will randomize the default dictionary and save it to the output location, instead.
 
