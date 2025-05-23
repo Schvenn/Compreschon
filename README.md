@@ -11,6 +11,8 @@ Secondly, I have only included words between 4 and 10 letters in length. This wa
 
 That being said, if you use this standard dictionary against a document that had highly specialized terms, such as medical terminology for example, it won't likely be very effective, but that's where the flexibility of this module comes into play though, because you don't have to use the included dictionary. You can use your own, custom dictionary and as soon as you do, the encryption mechanism becomes entirely unique to you. It is due to the nature of this approach that I decided to publish this module publicly, thereby giving people a very simple method of encrypting their own documents in a completely personalized way that does not require them to rely on a password to encrypt or decrypt. The dictionary you use acts as a type of pre-shared key, if you will, making it very flexible and easy to use.
 
+Is it fast? Nope. It took 3:59:22 to compresch the 2.7MB SOWPODS (International Scrabble English dictionary) file with 267,751 unique entries and the encrypted result was 3.4MB, 28% larger than the original. So, my theory that it can compress files is strained at best, since this would only happen if the file it was working with had more words greater than 6 characters in length than words smaller than that. So, it is possible, but unlikely. That doesn't make my research into compression a failure, nor does that make this project any less useful, because it still serves as an excellent custom encryption mechanism, even if the names of the functions are more or less wishful thinking.
+
 ## How Does It Work?
 
 	Usage: (compresch/decompresch) <filename> <alternatedictionary> -help
