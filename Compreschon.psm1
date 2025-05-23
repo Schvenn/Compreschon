@@ -53,7 +53,7 @@ return $result}
 # Encrypt individual tokens helper function.
 function encrypt-token {param([string]$token)
 if ($token.Length -ge $minimumlength) {$fullIndex = $dictionary.IndexOf($token.ToLower())
-if ($fullIndex -ge 0) {$binMeta = Get-CasingMetadata $token; $metaInt = [Convert]::ToInt64($binMeta, 2); $meta36 = Convert-ToBase36 $metaInt; $index36 = Convert-ToBase36 $fullIndex; Write-Host -f green "." -NoNewline; return "#$index36|$meta36¦"}}
+if ($fullIndex -ge 0) {$binMeta = Get-CasingMetadata $token; $metaInt = [Convert]::ToInt64($binMeta, 2); $meta36 = Convert-ToBase36 $metaInt; $index36 = Convert-ToBase36 $fullIndex; Write-Host -f darkgreen "·" -n; return "#$index36|$meta36¦"}}
 
 # Fallback to partial matches
 $output = ''; $pos = 0
@@ -62,7 +62,7 @@ for ($j = 0; $j -lt $dictionary.Count; $j++) {$dictWord = $dictionary[$j]
 if ($pos + $dictWord.Length -le $token.Length) {$substr = $token.Substring($pos, $dictWord.Length)
 if ($substr.ToLower() -eq $dictWord) {if ($dictWord.Length -gt $maxLen) {$maxLen = $dictWord.Length; $maxIndex = $j}}}}
 
-if ($maxLen -gt 0) {$matched = $token.Substring($pos, $maxLen); $binMeta = Get-CasingMetadata $matched; $metaInt = [Convert]::ToInt64($binMeta, 2); $meta36 = Convert-ToBase36 $metaInt; $index36 = Convert-ToBase36 $maxIndex; $output += "#$index36|$meta36¦"; Write-Host -f green "." -NoNewline; $pos += $maxLen}
+if ($maxLen -gt 0) {$matched = $token.Substring($pos, $maxLen); $binMeta = Get-CasingMetadata $matched; $metaInt = [Convert]::ToInt64($binMeta, 2); $meta36 = Convert-ToBase36 $metaInt; $index36 = Convert-ToBase36 $maxIndex; $output += "#$index36|$meta36¦"; Write-Host -f darkyellow "." -n; $pos += $maxLen}
 else {$output += $token[$pos]; $pos++}}
 return $output}
 
@@ -71,7 +71,7 @@ return $output}
 # Obtain input file content and replace true "#"
 $content = Get-Content -Raw -Path $inputFile; $content = $content -replace '#', '§'; $tokens = [regex]::Split($content, '(\b)')
 for ($i = 0; $i -lt $tokens.Length; $i++) {$tokens[$i] = encrypt-token $tokens[$i]}
-$compressedContent = ($tokens -join '')
+$compressedContent = ($tokens -join '') -replace "`r", '°' -replace "`n", '¬' -replace ' ', '†' -replace '-----', '‡'
 
 # Output
 $extension = [System.IO.Path]::GetExtension($inputFile); $compressedContent += "¦¦$extension¦¦"; $basename = [System.IO.Path]::GetFileNameWithoutExtension($inputFile); $outfile = "$basename.schvn"; Set-Content -Path $outfile -Value $compressedContent -Encoding UTF8; Write-Host -f cyan "`nCompressed file saved to: " -n; Write-Host -f yellow "$outfile`n"}
@@ -98,7 +98,7 @@ $chars = '0123456789abcdefghijklmnopqrstuvwxyz'; $result = 0; $value.ToCharArray
 return $result}
 
 # Read compressed file content and handle file extension logic.
-$content = Get-Content -Raw -Path $inputFile; $content = $content.TrimEnd(); $extensionPattern = '¦¦(.+?)¦¦\s*$'; $originalExtension = ''
+$content = Get-Content -Raw -Path $inputFile; $content = $content.TrimEnd(); $extensionPattern = '¦¦(\.\w+)¦¦$'; $originalExtension = ''
 if ($content -match $extensionPattern) {$originalExtension = $matches[1]; $content = $content -replace $extensionPattern, ''}
 else {Write-Host -f red "`nOriginal file extension metadata not found. Using .txt instead.`n"; $originalExtension = '.txt'}
 
@@ -109,7 +109,7 @@ $word = $dictionary[$index]
 if ($meta36) {$metaInt = Convert-FromBase36 $meta36; $mask = [Convert]::ToString($metaInt, 2).PadLeft($word.Length, '0'); $chars = $word.ToCharArray()
 for ($i = 0; $i -lt $chars.Length; $i++) {if ($mask[$i] -eq '1') {$chars[$i] = $chars[$i].ToString().ToUpper()}}
 return -join $chars} else {return $word}})
-$content = $content -replace '§', '#'
+$content = $content -replace '§', '#' -replace '°', "`r" -replace '¬', "`n" -replace '†', ' ' -replace '‡', '-----'
 
 # Output.
 $outputFile = [System.IO.Path]::ChangeExtension($inputFile, $originalExtension); Set-Content -Path $outputFile -Value $content -Encoding UTF8; Write-Host -f cyan "`nDecompressed file saved to: " -n; Write-Host -f yellow "$outputFile`n"}
@@ -153,6 +153,9 @@ When you submit a file for compreschon, the function looks for a matching word i
 The function replaces as many words as possible with the numerical reference to that word in the dictionary, using a base36 value to represent its location and another base36 value to represent which letters are capitalized. The capitalization is actually a binary value representing each place in the word; 0 for lower-case and 1 for upper-case. The word "Frank" for example, is included in the dictionary, because it's an adjective and is found at location 1752, or "1co" via base 36. The capitalization for that word would be represented in binary as "10000". While this is a very logical way to represent capitalization, it would also take up a lot of space. The base 36 equivalent however would simply be "g". Put that together and the word "Frank" is replaced in the document with "#1co|g¦". While that's 2 characters longer than the original word, there are many instances where the replacement value will be shorter than the original word and when that happens, it's possible for the function to act as a form of compression, as well as a form of encryption.
 
 Once the encryption of every word in the document is complete, the file will be saved with a .schvn extension and it can only be decrypted by the accompanying decompresch function, using the same dictionary that was used to create it. In the interests of simplicity, the original extension is stored in the encrypted file, so when it is decrypted, the file will be restored with it's original name and extension.
+
+As a couple points of interest is that the following five characters cannot appear in the original text, or they might break the logic: §°¬†‡
+Secondly, the compreschon function will provide progress indicators as it completes its work. a middle dot "·" for a full word match, and a period "." for a partial word match. The longer the file, the more dots will appear.
 ## Configuration
 
 The module includes a .PSD1 file for configuration. In it there are only 2 lines you need to adjust, if you so choose:
