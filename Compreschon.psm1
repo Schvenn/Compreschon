@@ -52,7 +52,7 @@ $chars = '0123456789abcdefghijklmnopqrstuvwxyz'; $result = 0; $value.ToCharArray
 return $result}
 
 # Read compressed file content and handle file extension logic.
-$content = Get-Content -Raw -Path $inputFile; $content = $content.TrimEnd(); $extensionPattern = '¦¦(\.\w+)¦¦$'; $originalExtension = ''
+$content = Get-Content -Raw -Path $inputFile; $content = $content.TrimEnd(); $extensionPattern = '¦¦(\.\w+)¦¦\r?\n?$'; $originalExtension = ''
 if ($content -match $extensionPattern) {$originalExtension = $matches[1]; $content = $content -replace $extensionPattern, ''}
 else {Write-Host -f red "`nOriginal file extension metadata not found. Using .txt instead.`n"; $originalExtension = '.txt'}
 
