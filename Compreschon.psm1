@@ -29,7 +29,7 @@ while ($true); return}
 # ----------------------------- Compreschon -----------------------------
 
 function compresch {# Customizable compression/encryption mechanism.
-param([string]$inputFile, [string]$alternatedictionary, [switch]$help)
+param([string]$inputFile, [string]$alternatedictionary, [string]$mode, [switch]$help)
 
 # Obtain alternate dictionary if specified and clean it, if necessary.
 if ($alternatedictionary) {$dictionary = Get-Content -Path (Join-Path $baseModulePath $alternatedictionary) | ForEach-Object {($_ -replace '\W', '').Trim().ToLower()} | Where-Object {$_.Length -ge $minimumlength}}
@@ -38,6 +38,52 @@ if ($alternatedictionary) {$dictionary = Get-Content -Path (Join-Path $baseModul
 if ($help) {gethelp; return}
 if (-not $inputFile) {Write-Host -f red "`nUsage: compresch <filename> <alternatedictionary> -help`n"; return}
 if (-not (Test-Path $inputFile)) {Write-Host -f red "`nInput file not found: $inputFile`n"; return}
+
+# ----------------------------- Decompreschon -----------------------------
+
+if ($mode -match "(?i)^(decode|extract)") {# Decompression/decryption companion function.
+
+# Function to restore case-sensitivity.
+function Apply-CasingMetadata {param($word, $meta); $chars = $word.ToCharArray(); for ($i = 0; $i -lt $chars.Length -and $i -lt $meta.Length; $i++) {if ($meta[$i] -eq '1') {$chars[$i] = $chars[$i].ToString().ToUpper()}}; return -join $chars}
+
+# Base36 helper function.
+function Convert-FromBase36 {param([string]$value)
+$chars = '0123456789abcdefghijklmnopqrstuvwxyz'; $result = 0; $value.ToCharArray() | ForEach-Object {$result = $result * 36 + $chars.IndexOf($_)}
+return $result}
+
+# Read compressed file content and handle file extension logic.
+$content = Get-Content -Raw -Path $inputFile; $content = $content.TrimEnd(); $extensionPattern = '¦¦(\.\w+)¦¦$'; $originalExtension = ''
+if ($content -match $extensionPattern) {$originalExtension = $matches[1]; $content = $content -replace $extensionPattern, ''}
+else {Write-Host -f red "`nOriginal file extension metadata not found. Using .txt instead.`n"; $originalExtension = '.txt'}
+
+# Regex to match compressed words and replace with the original text. Also replace the § with the original #.
+$pattern = '#([0-9a-z]+)(?:\|([0-9a-z]+))?¦'; $content = [regex]::Replace($content, $pattern, {param($match); $index36 = $match.Groups[1].Value; $meta36 = $match.Groups[2].Value; $index = Convert-FromBase36 $index36
+if ($index -lt 0 -or $index -ge $dictionary.Count) {return $match.Value}
+$word = $dictionary[$index]
+if ($meta36) {$metaInt = Convert-FromBase36 $meta36; $mask = [Convert]::ToString($metaInt, 2).PadLeft($word.Length, '0'); $chars = $word.ToCharArray()
+for ($i = 0; $i -lt $chars.Length; $i++) {if ($mask[$i] -eq '1') {$chars[$i] = $chars[$i].ToString().ToUpper()}}
+return -join $chars} else {return $word}})
+$content = $content -replace '§', '#' -replace '°', "`r" -replace '¬', "`n" -replace '†', ' ' -replace '‡', '-----'
+
+# Output.
+$outputFile = [System.IO.Path]::ChangeExtension($inputFile, $originalExtension); Set-Content -Path $outputFile -Value $content -Encoding UTF8; Write-Host -f cyan "`nDecompressed file saved to: " -n; Write-Host -f yellow "$outputFile`n"; return}
+
+# ----------------------------- End of Decompreschon -----------------------------
+# ----------------------------- Dicschonary -----------------------------
+
+if ($mode -match "(?i)^dic(schonary)?")  {# Randomize a dictionary file in order to create a unique "pre-shared key" mechanism.
+$outputFile = $alternatedictionary
+
+# Error-checking.
+if (-not $inputFile -and -not $outputFile) {Write-Host -f red "`nUsage: dicschonary <inputFile> <outputFile>`nIf no inputFile is provided, the default dictionary will be used.`n"; return}
+if ($inputFile -and -not $outputFile) {$outputFile = $inputFile; $inputFile = Join-Path $baseModulePath $script:dictionaryfile}
+if (-not (Test-Path $inputFile)) {Write-Host -f red "`nInput file not found: $inputFile`n"; return}
+
+# Read, shuffle, and write dictionary.
+$words = Get-Content $inputFile | Where-Object {$_ -and $_.Trim() -ne ''}
+$shuffled = $words | Get-Random -Count $words.Count; $shuffled | Set-Content $outputFile; Write-Host -f cyan "`nDictionary randomized and saved to: " -n; Write-Host -f yellow "$outputFile`n"; return}
+
+# ----------------------------- End of Dicschonary -----------------------------
 
 # Function to preserve case-sensitivity.
 function Get-CasingMetadata {param($word); return ($word.ToCharArray() | ForEach-Object {if ($_ -cmatch '[A-Z]') {'1'} else {'0'}}) -join ''}
@@ -76,67 +122,13 @@ $compressedContent = ($tokens -join '') -replace "`r", '°' -replace "`n", '¬' 
 # Output
 $extension = [System.IO.Path]::GetExtension($inputFile); $compressedContent += "¦¦$extension¦¦"; $basename = [System.IO.Path]::GetFileNameWithoutExtension($inputFile); $outfile = "$basename.schvn"; Set-Content -Path $outfile -Value $compressedContent -Encoding UTF8; Write-Host -f cyan "`nCompressed file saved to: " -n; Write-Host -f yellow "$outfile`n"}
 
-# ----------------------------- Decompreschon -----------------------------
-
-function decompresch {# Decompression/decryption companion function.
-param([string]$inputFile, [string]$alternatedictionary, [switch]$help)
-
-# Obtain alternate dictionary if specified and clean it, if necessary.
-if ($alternatedictionary) {$dictionary = Get-Content -Path (Join-Path $baseModulePath $alternatedictionary) | ForEach-Object {($_ -replace '\W', '').Trim().ToLower()} | Where-Object {$_.Length -ge $minimumlength}}
-
-# Error-checking.
-if ($help) {gethelp; return}
-if (-not $inputFile) {Write-Host -f red "`nUsage: decompresch <filename> <alternatedictionary> -help`n"; return}
-if (-not (Test-Path $inputFile)) {Write-Host -f red "`nInput file not found: $inputFile`n"; return}
-
-# Function to restore case-sensitivity.
-function Apply-CasingMetadata {param($word, $meta); $chars = $word.ToCharArray(); for ($i = 0; $i -lt $chars.Length -and $i -lt $meta.Length; $i++) {if ($meta[$i] -eq '1') {$chars[$i] = $chars[$i].ToString().ToUpper()}}; return -join $chars}
-
-# Base36 helper function.
-function Convert-FromBase36 {param([string]$value)
-$chars = '0123456789abcdefghijklmnopqrstuvwxyz'; $result = 0; $value.ToCharArray() | ForEach-Object {$result = $result * 36 + $chars.IndexOf($_)}
-return $result}
-
-# Read compressed file content and handle file extension logic.
-$content = Get-Content -Raw -Path $inputFile; $content = $content.TrimEnd(); $extensionPattern = '¦¦(\.\w+)¦¦$'; $originalExtension = ''
-if ($content -match $extensionPattern) {$originalExtension = $matches[1]; $content = $content -replace $extensionPattern, ''}
-else {Write-Host -f red "`nOriginal file extension metadata not found. Using .txt instead.`n"; $originalExtension = '.txt'}
-
-# Regex to match compressed words and replace with the original text. Also replace the § with the original #.
-$pattern = '#([0-9a-z]+)(?:\|([0-9a-z]+))?¦'; $content = [regex]::Replace($content, $pattern, {param($match); $index36 = $match.Groups[1].Value; $meta36 = $match.Groups[2].Value; $index = Convert-FromBase36 $index36
-if ($index -lt 0 -or $index -ge $dictionary.Count) {return $match.Value}
-$word = $dictionary[$index]
-if ($meta36) {$metaInt = Convert-FromBase36 $meta36; $mask = [Convert]::ToString($metaInt, 2).PadLeft($word.Length, '0'); $chars = $word.ToCharArray()
-for ($i = 0; $i -lt $chars.Length; $i++) {if ($mask[$i] -eq '1') {$chars[$i] = $chars[$i].ToString().ToUpper()}}
-return -join $chars} else {return $word}})
-$content = $content -replace '§', '#' -replace '°', "`r" -replace '¬', "`n" -replace '†', ' ' -replace '‡', '-----'
-
-# Output.
-$outputFile = [System.IO.Path]::ChangeExtension($inputFile, $originalExtension); Set-Content -Path $outputFile -Value $content -Encoding UTF8; Write-Host -f cyan "`nDecompressed file saved to: " -n; Write-Host -f yellow "$outputFile`n"}
-
-# ----------------------------- Dicschonary -----------------------------
-
-function dicschonary {# Randomize a dictionary file in order to create a unique "pre-shared key" mechanism.
-param ([string]$inputFile, [string]$outputFile, [switch]$help)
-
-# Error-checking.
-if ($help) {gethelp; return}
-if (-not $inputFile -and -not $outputFile) {Write-Host -f red "`nUsage: dicschonary <inputFile> <outputFile>`nIf no inputFile is provided, the default dictionary will be used.`n"; return}
-if ($inputFile -and -not $outputFile) {$outputFile = $inputFile; $inputFile = Join-Path $baseModulePath $script:dictionaryfile}
-if (-not (Test-Path $inputFile)) {Write-Host -f red "`nInput file not found: $inputFile`n"; return}
-
-# Read, shuffle, and write dictionary.
-$words = Get-Content $inputFile | Where-Object {$_ -and $_.Trim() -ne ''}
-$shuffled = $words | Get-Random -Count $words.Count; $shuffled | Set-Content $outputFile; Write-Host -f cyan "`nDictionary randomized and saved to: " -n; Write-Host -f yellow "$outputFile`n"}
-
-Export-ModuleMember -Function compresch, decompresch, dicschonary
-
+Export-ModuleMember -Function compresch
 # ----------------------------- Help -----------------------------
 
 <#
 ## Overview
 
-The two primary functions allow you to encrypt and decrypt flat text files using a custom dictionary. In some cases, these files may even end up being smaller than their original. To be honest, this project started as a result of me investigating compression methodologies and attempting to understand how they work, thus the names compresch and decompresch.
+The two primary functions allow you to encrypt and decrypt flat text files using a custom dictionary. In some cases, these files may even end up being smaller than their original. To be honest, this project started as a result of me investigating compression methodologies and attempting to understand how they work, thus the name compreschon.
 
 The concept is reasonably simple. The module ships with an English dictionary consisting of nearly 5000 of the most popular English words according to Google, but with some modifications. I tried, through automated means, to reduce most words to their root, as opposed to keeping all of the extended versions of a word. So, I've included the word "encrypt", but not "encrypted", "encrypts" or "encrypting". The word "encryption" is actually included, but that's also because the automated method I used to strip words to their roots isn't perfect.
 
@@ -144,18 +136,20 @@ Secondly, I have only included words between 4 and 10 letters in length. This wa
 
 That being said, if you use this standard dictionary against a document that had highly specialized terms, such as medical terminology for example, it won't likely be very effective, but that's where the flexibility of this module comes into play though, because you don't have to use the included dictionary. You can use your own, custom dictionary and as soon as you do, the encryption mechanism becomes entirely unique to you. It is due to the nature of this approach that I decided to publish this module publicly, thereby giving people a very simple method of encrypting their own documents in a completely personalized way that does not require them to rely on a password to encrypt or decrypt. The dictionary you use acts as a type of pre-shared key, if you will, making it very flexible and easy to use.
 
-Is it fast? Nope. It took 3:59:22 to compresch the 2.7MB SOWPODS (International Scrabble English dictionary) file with 267,751 unique entries and the encrypted result was 3.4MB, 28% larger than the original. So, my theory that it can compress files is strained at best, since this would only happen if the file it was working with had more words greater than 6 characters in length than words smaller than that. So, it is possible, but unlikely. That doesn't make my research into compression a failure, nor does that make this project any less useful, because it still serves as an excellent custom encryption mechanism, even if the names of the functions are more or less wishful thinking.
+Is it fast? Nope. It took 3:59:22 to compresch the 2.7MB SOWPODS (International Scrabble English dictionary) file with 267,751 unique entries and the encrypted result was 3.4MB, 28% larger than the original. The largest word in SOWPODS is "infantilisation", which if fully capitalized, would be represented as: #5QLJ|1EKF¦, only 4 letters smaller than the original word, in this case. So, my theory that it can compress files is strained at best, since this would only happen if the file it was working with had more words greater than 6 characters in length than words smaller than that. So, it is possible, but unlikely. That doesn't make my research into compression a failure, nor does that make this project any less useful, because it still serves as an excellent custom encryption mechanism, even if the name is more or less wishful thinking.
 ## How Does It Work?
 
-Usage: (compresch/decompresch) <filename> <alternatedictionary> -help
+Usage: compresch <filename> <alternatedictionary> -mode <decrypt|extract> -help
+
+The default mode is to compresch or encrypt a file, so no -mode is required at the command line, just the -filename and optional -alternatedictionary. Use the -mode "decrypt" or "extract" to reverse the process.
 
 When you submit a file for compreschon, the function looks for a matching word in the dictionary. Failing that, it looks for the longest matching string within the word against a word in the dictionary. So, words I mentioned earlier like "encrypted" may not be a direct match, but the first portion of that word would be a match. The function would then continue by replacing "encrypt" with the encrypted value and leave the last two letters untouched. 
 
 The function replaces as many words as possible with the numerical reference to that word in the dictionary, using a base36 value to represent its location and another base36 value to represent which letters are capitalized. The capitalization is actually a binary value representing each place in the word; 0 for lower-case and 1 for upper-case. The word "Frank" for example, is included in the dictionary, because it's an adjective and is found at location 1752, or "1co" via base 36. The capitalization for that word would be represented in binary as "10000". While this is a very logical way to represent capitalization, it would also take up a lot of space. The base 36 equivalent however would simply be "g". Put that together and the word "Frank" is replaced in the document with "#1co|g¦". While that's 2 characters longer than the original word, there are many instances where the replacement value will be shorter than the original word and when that happens, it's possible for the function to act as a form of compression, as well as a form of encryption.
 
-Once the encryption of every word in the document is complete, the file will be saved with a .schvn extension and it can only be decrypted by the accompanying decompresch function, using the same dictionary that was used to create it. In the interests of simplicity, the original extension is stored in the encrypted file, so when it is decrypted, the file will be restored with it's original name and extension.
+Once the encryption of every word in the document is complete, the file will be saved with a .schvn extension and it can only be decrypted by using the mode "decrypt", or "extract" if you prefer, and using the same dictionary to accomplish this that was used to create it. In the interests of simplicity, the original extension is stored in the encrypted file, so when it is decrypted, the file will be restored with it's original name and extension.
 
-As a couple points of interest is that the following five characters cannot appear in the original text, or they might break the logic: §°¬†‡
+One point of interest is that the following five characters should not appear in the original text, or they might break the logic: §°¬†‡
 Secondly, the compreschon function will provide progress indicators as it completes its work. a middle dot "·" for a full word match, and a period "." for a partial word match. The longer the file, the more dots will appear.
 ## Configuration
 
@@ -166,13 +160,13 @@ RootModule = 'Compresch.psm1'
 PrivateData = @{minimumlength = 4
 dictionaryfile = 'Dictionary.schvn'}}
 
-The minimumlength value tells the compresch function the smallest words to replace with an indexed value. The default it set to 4. Smaller values will lead to encrypted files that are larger than their original and setting a larger value, while it will likely encrypt files faster, will lead to less encrypted content, which means that the resulting file may be easier to read, even without the dictionary. So, I wouldn't reccommend using values less than 4 or greater than 6.
+The minimumlength value tells the compreschon function the smallest words to replace with an indexed value. The default it set to 4. Smaller values will lead to encrypted files that are larger than their original and setting a larger value, while it will likely encrypt files faster, will lead to less encrypted content, which means that the resulting file may be easier to read, even without the dictionary. So, I wouldn't reccommend using values less than 4 or greater than 6.
 
 The dictionaryfile value is the name of your custom dictionary, which must be located in the same directory as the module in order for it to work properly.
 
 ## Dictionary Randomization/Pre-Shared Key Creation
 
-Usage: dicschonary <inputfile> <outputfile>
+Usage: compresch <inputfile> <outputfile> -mode "dic(schonary)"
 
 I have also included a dictionary randomizer which allows you to take any dictionary and randomize the entries, thereby creating a unique version for your own use. If no input file is provided, the function will randomize the default dictionary and save it to the output location, instead.
 
