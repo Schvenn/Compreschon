@@ -9,13 +9,34 @@ $minimumlength = $config.PrivateData.minimumlength; $script:dictionaryfile = $co
 # Obtain default dictionary and clean it, if necessary.
 $dictionary = Get-Content -Path (Join-Path $baseModulePath $script:dictionaryfile) | ForEach-Object {($_ -replace '\W', '').Trim().ToLower()} | Where-Object {$_.Length -ge $minimumlength}
 
-# ----------------------------- GetHelp -----------------------------
+# ----------------------------- Compreschon -----------------------------
 
-function gethelp {function scripthelp ($section) {# (Internal) Generate the help sections from the comments section of the script.
+function compresch {# Customizable compression/encryption mechanism.
+param([string]$inputFile, [string]$alternatedictionary, [string]$mode, [switch]$help)
+
+if ($help) {# Inline help.
+function wordwrap ($field, [int]$maximumlinelength = 65) {# Modify fields sent to it with proper word wrapping.
+if ($null -eq $field -or $field.Length -eq 0) {return $null}
+$breakchars = ',.;?!\/ '; $wrapped = @()
+
+foreach ($line in $field -split "`n") {if ($line.Trim().Length -eq 0) {$wrapped += ''; continue}
+$remaining = $line.Trim()
+while ($remaining.Length -gt $maximumlinelength) {$segment = $remaining.Substring(0, $maximumlinelength); $breakIndex = -1
+
+foreach ($char in $breakchars.ToCharArray()) {$index = $segment.LastIndexOf($char)
+if ($index -gt $breakIndex) {$breakChar = $char; $breakIndex = $index}}
+if ($breakIndex -lt 0) {$breakIndex = $maximumlinelength - 1; $breakChar = ''}
+$chunk = $segment.Substring(0, $breakIndex + 1).TrimEnd(); $wrapped += $chunk; $remaining = $remaining.Substring($breakIndex + 1).TrimStart()}
+
+if ($remaining.Length -gt 0) {$wrapped += $remaining}}
+return ($wrapped -join "`n")}
+
+function scripthelp ($section) {# (Internal) Generate the help sections from the comments section of the script.
 ""; Write-Host -f yellow ("-" * 100); $pattern = "(?ims)^## ($section.*?)(##|\z)"; $match = [regex]::Match($scripthelp, $pattern); $lines = $match.Groups[1].Value.TrimEnd() -split "`r?`n", 2; Write-Host $lines[0] -f yellow; Write-Host -f yellow ("-" * 100)
-if ($lines.Count -gt 1) {$lines[1] | Out-String | Out-Host -Paging}; Write-Host -f yellow ("-" * 100)}
+if ($lines.Count -gt 1) {wordwrap $lines[1] 100| Out-String | Out-Host -Paging}; Write-Host -f yellow ("-" * 100)}
 $scripthelp = Get-Content -Raw -Path $PSCommandPath; $sections = [regex]::Matches($scripthelp, "(?im)^## (.+?)(?=\r?\n)")
 if ($sections.Count -eq 1) {cls; Write-Host "$([System.IO.Path]::GetFileNameWithoutExtension($PSCommandPath)) Help:" -f cyan; scripthelp $sections[0].Groups[1].Value; ""; return}
+
 $selection = $null
 do {cls; Write-Host "$([System.IO.Path]::GetFileNameWithoutExtension($PSCommandPath)) Help Sections:`n" -f cyan; for ($i = 0; $i -lt $sections.Count; $i++) {
 "{0}: {1}" -f ($i + 1), $sections[$i].Groups[1].Value}
@@ -26,16 +47,10 @@ if ($index -ge 1 -and $index -le $sections.Count) {$selection = $index}
 else {$selection = $null}} else {""; return}}
 while ($true); return}
 
-# ----------------------------- Compreschon -----------------------------
-
-function compresch {# Customizable compression/encryption mechanism.
-param([string]$inputFile, [string]$alternatedictionary, [string]$mode, [switch]$help)
-
 # Obtain alternate dictionary if specified and clean it, if necessary.
 if ($alternatedictionary) {$dictionary = Get-Content -Path (Join-Path $baseModulePath $alternatedictionary) | ForEach-Object {($_ -replace '\W', '').Trim().ToLower()} | Where-Object {$_.Length -ge $minimumlength}}
 
 # Error-checking.
-if ($help) {gethelp; return}
 if (-not $inputFile) {Write-Host -f red "`nUsage: compresch <filename> <alternatedictionary> -help`n"; return}
 if (-not (Test-Path $inputFile)) {Write-Host -f red "`nInput file not found: $inputFile`n"; return}
 
@@ -123,7 +138,6 @@ $compressedContent = ($tokens -join '') -replace "`r", '°' -replace "`n", '¬' 
 $extension = [System.IO.Path]::GetExtension($inputFile); $compressedContent += "¦¦$extension¦¦"; $basename = [System.IO.Path]::GetFileNameWithoutExtension($inputFile); $outfile = "$basename.schvn"; Set-Content -Path $outfile -Value $compressedContent -Encoding UTF8; Write-Host -f cyan "`nCompressed file saved to: " -n; Write-Host -f yellow "$outfile`n"}
 
 Export-ModuleMember -Function compresch
-# ----------------------------- Help -----------------------------
 
 <#
 ## Overview
