@@ -7,7 +7,11 @@ $config = Import-PowerShellDataFile -Path $configPath
 $minimumlength = $config.PrivateData.minimumlength; $script:dictionaryfile = $config.PrivateData.dictionaryfile
 
 # Obtain default dictionary and clean it, if necessary.
-$dictionary = Get-Content -Path (Join-Path $baseModulePath $script:dictionaryfile) | ForEach-Object {($_ -replace '\W', '').Trim().ToLower()} | Where-Object {$_.Length -ge $minimumlength}
+function loaddictionary ($file) {if ($file -like '*.gz') {$stream = [IO.File]::OpenRead($file); $gzip = New-Object IO.Compression.GzipStream($stream, [IO.Compression.CompressionMode]::Decompress); $reader = New-Object IO.StreamReader($gzip); $lines = @()
+while (-not $reader.EndOfStream) {$lines += $reader.ReadLine()}
+$reader.Close(); $gzip.Close(); $stream.Close(); return $lines}
+else {return Get-Content $file}}
+$rawDict = loaddictionary (Join-Path $baseModulePath $script:dictionaryfile); $dictionary = $rawDict | ForEach-Object {($_ -replace '\W', '').Trim().ToLower()} | Where-Object {$_.Length -ge $minimumlength}
 
 # ----------------------------- Compreschon -----------------------------
 
@@ -15,9 +19,13 @@ function compresch {# Customizable compression/encryption mechanism.
 param([string]$inputFile, [string]$alternatedictionary, [string]$mode, [switch]$help)
 
 if ($help) {# Inline help.
-function wordwrap ($field, [int]$maximumlinelength = 65) {# Modify fields sent to it with proper word wrapping.
-if ($null -eq $field -or $field.Length -eq 0) {return $null}
+# Modify fields sent to it with proper word wrapping.
+function wordwrap ($field, $maximumlinelength) {if ($null -eq $field -or $field.Length -eq 0) {return $null}
 $breakchars = ',.;?!\/ '; $wrapped = @()
+
+if (-not $maximumlinelength) {[int]$maximumlinelength = (100, $Host.UI.RawUI.WindowSize.Width | Measure-Object -Maximum).Maximum}
+if ($maximumlinelength) {if ($maximumlinelength -lt 60) {[int]$maximumlinelength = 60}
+if ($maximumlinelength -gt $Host.UI.RawUI.BufferSize.Width) {[int]$maximumlinelength = $Host.UI.RawUI.BufferSize.Width}}
 
 foreach ($line in $field -split "`n") {if ($line.Trim().Length -eq 0) {$wrapped += ''; continue}
 $remaining = $line.Trim()
