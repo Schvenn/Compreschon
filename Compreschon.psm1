@@ -1,4 +1,5 @@
-# ----------------------------- Configuration -----------------------------
+function compresch ([string]$inputFile, [string]$alternatedictionary, [string]$mode, [switch]$help) {# Customizable compression/encryption mechanism.
+# ----------------------------- Configuration ---------------------------------
 
 # Load the user configuration.
 $baseModulePath = "$powershell\Modules\Compreschon"; $configPath = Join-Path $baseModulePath "Compreschon.psd1"
@@ -13,15 +14,14 @@ $reader.Close(); $gzip.Close(); $stream.Close(); return $lines}
 else {return Get-Content $file}}
 $rawDict = loaddictionary (Join-Path $baseModulePath $script:dictionaryfile); $dictionary = $rawDict | ForEach-Object {($_ -replace '\W', '').Trim().ToLower()} | Where-Object {$_.Length -ge $minimumlength}
 
-# ----------------------------- Compreschon -----------------------------
-
-function compresch {# Customizable compression/encryption mechanism.
-param([string]$inputFile, [string]$alternatedictionary, [string]$mode, [switch]$help)
+# ----------------------------- Help ------------------------------------------
 
 if ($help) {# Inline help.
 # Modify fields sent to it with proper word wrapping.
 function wordwrap ($field, $maximumlinelength) {if ($null -eq $field -or $field.Length -eq 0) {return $null}
 $breakchars = ',.;?!\/ '; $wrapped = @()
+
+# ----------------------------- Compreschon -----------------------------------
 
 if (-not $maximumlinelength) {[int]$maximumlinelength = (100, $Host.UI.RawUI.WindowSize.Width | Measure-Object -Maximum).Maximum}
 if ($maximumlinelength) {if ($maximumlinelength -lt 60) {[int]$maximumlinelength = 60}
@@ -66,11 +66,8 @@ if (-not (Test-Path $inputFile)) {Write-Host -f red "`nInput file not found: $in
 
 if ($mode -match "(?i)^(decode|extract)") {# Decompression/decryption companion function.
 
-# Function to restore case-sensitivity.
-function Apply-CasingMetadata {param($word, $meta); $chars = $word.ToCharArray(); for ($i = 0; $i -lt $chars.Length -and $i -lt $meta.Length; $i++) {if ($meta[$i] -eq '1') {$chars[$i] = $chars[$i].ToString().ToUpper()}}; return -join $chars}
-
 # Base36 helper function.
-function Convert-FromBase36 {param([string]$value)
+function convertfrombase36 {param([string]$value)
 $chars = '0123456789abcdefghijklmnopqrstuvwxyz'; $result = 0; $value.ToCharArray() | ForEach-Object {$result = $result * 36 + $chars.IndexOf($_)}
 return $result}
 
@@ -80,10 +77,10 @@ if ($content -match $extensionPattern) {$originalExtension = $matches[1]; $conte
 else {Write-Host -f red "`nOriginal file extension metadata not found. Using .txt instead.`n"; $originalExtension = '.txt'}
 
 # Regex to match compressed words and replace with the original text. Also replace the § with the original #.
-$pattern = '#([0-9a-z]+)(?:\|([0-9a-z]+))?¦'; $content = [regex]::Replace($content, $pattern, {param($match); $index36 = $match.Groups[1].Value; $meta36 = $match.Groups[2].Value; $index = Convert-FromBase36 $index36
+$pattern = '#([0-9a-z]+)(?:\|([0-9a-z]+))?¦'; $content = [regex]::Replace($content, $pattern, {param($match); $index36 = $match.Groups[1].Value; $meta36 = $match.Groups[2].Value; $index = convertfrombase36 $index36
 if ($index -lt 0 -or $index -ge $dictionary.Count) {return $match.Value}
 $word = $dictionary[$index]
-if ($meta36) {$metaInt = Convert-FromBase36 $meta36; $mask = [Convert]::ToString($metaInt, 2).PadLeft($word.Length, '0'); $chars = $word.ToCharArray()
+if ($meta36) {$metaInt = convertfrombase36 $meta36; $mask = [Convert]::ToString($metaInt, 2).PadLeft($word.Length, '0'); $chars = $word.ToCharArray()
 for ($i = 0; $i -lt $chars.Length; $i++) {if ($mask[$i] -eq '1') {$chars[$i] = $chars[$i].ToString().ToUpper()}}
 return -join $chars} else {return $word}})
 $content = $content -replace '§', '#' -replace '°', "`r" -replace '¬', "`n" -replace '†', ' ' -replace '‡', '-----'
@@ -109,10 +106,10 @@ $shuffled = $words | Get-Random -Count $words.Count; $shuffled | Set-Content $ou
 # ----------------------------- End of Dicschonary -----------------------------
 
 # Function to preserve case-sensitivity.
-function Get-CasingMetadata {param($word); return ($word.ToCharArray() | ForEach-Object {if ($_ -cmatch '[A-Z]') {'1'} else {'0'}}) -join ''}
+function getcasingmetadata {param($word); return ($word.ToCharArray() | ForEach-Object {if ($_ -cmatch '[A-Z]') {'1'} else {'0'}}) -join ''}
 
 # Base36 helper function.
-function Convert-ToBase36 {param([long]$value)
+function converttobase36 {param([long]$value)
 $chars = '0123456789abcdefghijklmnopqrstuvwxyz'
 if ($value -eq 0) {return '0'}
 $result = ''
@@ -120,9 +117,9 @@ while ($value -gt 0) {$result = $chars[$value % 36] + $result; $value = [math]::
 return $result}
 
 # Encrypt individual tokens helper function.
-function encrypt-token {param([string]$token)
+function encrypttoken {param([string]$token)
 if ($token.Length -ge $minimumlength) {$fullIndex = $dictionary.IndexOf($token.ToLower())
-if ($fullIndex -ge 0) {$binMeta = Get-CasingMetadata $token; $metaInt = [Convert]::ToInt64($binMeta, 2); $meta36 = Convert-ToBase36 $metaInt; $index36 = Convert-ToBase36 $fullIndex; Write-Host -f darkgreen "·" -n; return "#$index36|$meta36¦"}}
+if ($fullIndex -ge 0) {$binMeta = getcasingmetadata $token; $metaInt = [Convert]::ToInt64($binMeta, 2); $meta36 = converttobase36 $metaInt; $index36 = converttobase36 $fullIndex; Write-Host -f darkgreen "·" -n; return "#$index36|$meta36¦"}}
 
 # Fallback to partial matches
 $output = ''; $pos = 0
@@ -131,7 +128,7 @@ for ($j = 0; $j -lt $dictionary.Count; $j++) {$dictWord = $dictionary[$j]
 if ($pos + $dictWord.Length -le $token.Length) {$substr = $token.Substring($pos, $dictWord.Length)
 if ($substr.ToLower() -eq $dictWord) {if ($dictWord.Length -gt $maxLen) {$maxLen = $dictWord.Length; $maxIndex = $j}}}}
 
-if ($maxLen -gt 0) {$matched = $token.Substring($pos, $maxLen); $binMeta = Get-CasingMetadata $matched; $metaInt = [Convert]::ToInt64($binMeta, 2); $meta36 = Convert-ToBase36 $metaInt; $index36 = Convert-ToBase36 $maxIndex; $output += "#$index36|$meta36¦"; Write-Host -f darkyellow "." -n; $pos += $maxLen}
+if ($maxLen -gt 0) {$matched = $token.Substring($pos, $maxLen); $binMeta = getcasingmetadata $matched; $metaInt = [Convert]::ToInt64($binMeta, 2); $meta36 = converttobase36 $metaInt; $index36 = converttobase36 $maxIndex; $output += "#$index36|$meta36¦"; Write-Host -f darkyellow "." -n; $pos += $maxLen}
 else {$output += $token[$pos]; $pos++}}
 return $output}
 
@@ -139,7 +136,7 @@ return $output}
 
 # Obtain input file content and replace true "#"
 $content = Get-Content -Raw -Path $inputFile; $content = $content -replace '#', '§'; $tokens = [regex]::Split($content, '(\b)')
-for ($i = 0; $i -lt $tokens.Length; $i++) {$tokens[$i] = encrypt-token $tokens[$i]}
+for ($i = 0; $i -lt $tokens.Length; $i++) {$tokens[$i] = encrypttoken $tokens[$i]}
 $compressedContent = ($tokens -join '') -replace "`r", '°' -replace "`n", '¬' -replace ' ', '†' -replace '-----', '‡'
 
 # Output
@@ -193,4 +190,26 @@ Usage: compresch <inputfile> <outputfile> -mode "dic(schonary)"
 I have also included a dictionary randomizer which allows you to take any dictionary and randomize the entries, thereby creating a unique version for your own use. If no input file is provided, the function will randomize the default dictionary and save it to the output location, instead.
 
 If you're wondering how secure that method could possibly be, well it works out to log10(4717!) ≈ 14899 digits and since there are only about 10^80 atoms in the observable universe, which is 10 followed by 80 digits, I think we can assume that randomizing just this dictionary alone would be enough to make brute force impossible. Therefore, you can use this to create as many dictionaries as you need, but remember to share the randomized version of the dictionary with the user or system that needs to decrypt the files created using that dictionary. Otherwise, the content will be lost and very likely impossible to recover.
+## License
+MIT License
+
+Copyright © 2025 Craig Plath
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell 
+copies of the Software, and to permit persons to whom the Software is 
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in 
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR 
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, 
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE 
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER 
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, 
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN 
+THE SOFTWARE.
 ##>
