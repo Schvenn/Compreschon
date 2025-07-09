@@ -15,7 +15,7 @@ Is it fast? Nope. It took 3:59:22 to compresch the 2.7MB SOWPODS (International 
 
 ## How Does It Work?
 
-	Usage: compresch <filename> <alternatedictionary> -mode <decrypt|extract> -help
+	Usage: compresch <filename> <alternatedictionary> -mode <decompresch|extract|dic(schonary)> -help
 
 The default mode is to compresch or encrypt a file, so no -mode is required at the command line, just the -filename and optional -alternatedictionary. Use the -mode "decrypt" or "extract" to reverse the process.
 
@@ -42,7 +42,7 @@ The dictionaryfile value is the name of your custom dictionary, which must be lo
 
 ## Dictionary Randomization/Pre-Shared Key Creation
 
-	Usage: compresch <inputfile> <outputfile> -mode "dic(schonary)"
+	Usage: compresch <inputfile> <outputfile> -mode dic(schonary)
 
 I have also included a dictionary randomizer which allows you to take any dictionary and randomize the entries, thereby creating a unique version for your own use. If no input file is provided, the function will randomize the default dictionary and save it to the output location, instead.
 
