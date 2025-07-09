@@ -1,4 +1,4 @@
-@{ModuleVersion = '1.1'
+@{ModuleVersion = '1.3'
 RootModule = 'Compreschon.psm1'
 PrivateData = @{minimumlength = 4
 dictionaryfile = 'Common.dictionary.gz'}}
