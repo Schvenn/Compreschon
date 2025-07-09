@@ -12,7 +12,11 @@ function loaddictionary ($file) {if ($file -like '*.gz') {$stream = [IO.File]::O
 while (-not $reader.EndOfStream) {$lines += $reader.ReadLine()}
 $reader.Close(); $gzip.Close(); $stream.Close(); return $lines}
 else {return Get-Content $file}}
+
 $rawDict = loaddictionary (Join-Path $baseModulePath $script:dictionaryfile); $dictionary = $rawDict | ForEach-Object {($_ -replace '\W', '').Trim().ToLower()} | Where-Object {$_.Length -ge $minimumlength}
+
+# Write GZip files.
+function gzipfile ($file) {$file = Resolve-Path $file; $gzipFile = "$file.gz"; $fs = [System.IO.File]::OpenRead($file); $gzfs = [System.IO.File]::Create($gzipFile); $gz = New-Object System.IO.Compression.GZipStream($gzfs, [System.IO.Compression.CompressionMode]::Compress); $fs.CopyTo($gz); $gz.Close(); $fs.Close(); $gzfs.Close(); Remove-Item $file -Force; return $gzipFile}
 
 # ----------------------------- Help ------------------------------------------
 
@@ -56,12 +60,31 @@ if ($index -ge 1 -and $index -le $sections.Count) {$selection = $index}
 else {$selection = $null}} else {""; return}}
 while ($true); return}
 
-# Obtain alternate dictionary if specified and clean it, if necessary.
-if ($alternatedictionary) {$dictionary = Get-Content -Path (Join-Path $baseModulePath $alternatedictionary) | ForEach-Object {($_ -replace '\W', '').Trim().ToLower()} | Where-Object {$_.Length -ge $minimumlength}}
+# ----------------------------- End of Help -----------------------------------
 
 # Error-checking.
-if (-not $inputFile) {Write-Host -f red "`nUsage: compresch <filename> <alternatedictionary> -mode <decompresch|extract> -help`n"; return}
+if (-not $inputFile -and $mode -notmatch "(?i)^dic(schonary)?") {Write-Host -f red "`nUsage: compresch <filename> <alternatedictionary> -mode <decompresch|extract|dic(schonary)> -help`n"; return}
+
+# ----------------------------- Dicschonary -----------------------------
+
+# Randomize a dictionary file in order to create a unique "pre-shared key" mechanism.
+if ($mode -match "(?i)^dic(schonary)?") {$outputFile = $alternatedictionary
+
+# Error-checking.
+if (-not $inputFile -and -not $outputFile) {Write-Host -f red "`nUsage: dicschonary <inputFile> <outputFile>`nIf no inputFile is provided, the default dictionary will be used.`n"; return}
+if ($inputFile -and -not $outputFile) {$outputFile = $inputFile; $inputFile = Join-Path $baseModulePath $script:dictionaryfile}
 if (-not (Test-Path $inputFile)) {Write-Host -f red "`nInput file not found: $inputFile`n"; return}
+
+# Read, shuffle, and write dictionary.
+$words = loaddictionary $inputFile | Where-Object {$_ -and $_.Trim() -ne ''}; $shuffled = $words | Get-Random -Count $words.Count; $tmp = [System.IO.Path]::GetTempFileName(); $shuffled | Set-Content -Path $outputFile -Encoding UTF8; $outputFile = gzipfile $outputFile; Write-Host -f cyan "`nDictionary randomized and saved to: " -n; Write-Host -f yellow "$outputFile`n"; return}
+
+# ----------------------------- End of Dicschonary -----------------------------
+
+# Error-checking.
+if (-not (Test-Path $inputFile)) {Write-Host -f red "`nInput file not found: $inputFile`n"; return}
+
+# Obtain alternate dictionary if specified and clean it, if necessary.
+if ($alternatedictionary) {$dictionary = Get-Content -Path (Join-Path $baseModulePath $alternatedictionary) | ForEach-Object {($_ -replace '\W', '').Trim().ToLower()} | Where-Object {$_.Length -ge $minimumlength}}
 
 # ----------------------------- Decompreschon -----------------------------
 
@@ -90,21 +113,6 @@ $content = $content -replace '§', '#' -replace '°', "`r" -replace '¬', "`n" -
 $outputFile = [System.IO.Path]::ChangeExtension($inputFile, $originalExtension); $outputFile = $outputFile -replace '.schvn.', '.'; Set-Content -Path $outputFile -Value $content -Encoding UTF8; Write-Host -f cyan "`nDecompressed file saved to: " -n; Write-Host -f yellow "$outputFile`n"; return}
 
 # ----------------------------- End of Decompreschon -----------------------------
-# ----------------------------- Dicschonary -----------------------------
-
-if ($mode -match "(?i)^dic(schonary)?")  {# Randomize a dictionary file in order to create a unique "pre-shared key" mechanism.
-$outputFile = $alternatedictionary
-
-# Error-checking.
-if (-not $inputFile -and -not $outputFile) {Write-Host -f red "`nUsage: dicschonary <inputFile> <outputFile>`nIf no inputFile is provided, the default dictionary will be used.`n"; return}
-if ($inputFile -and -not $outputFile) {$outputFile = $inputFile; $inputFile = Join-Path $baseModulePath $script:dictionaryfile}
-if (-not (Test-Path $inputFile)) {Write-Host -f red "`nInput file not found: $inputFile`n"; return}
-
-# Read, shuffle, and write dictionary.
-$words = Get-Content $inputFile | Where-Object {$_ -and $_.Trim() -ne ''}
-$shuffled = $words | Get-Random -Count $words.Count; $shuffled | Set-Content $outputFile; Write-Host -f cyan "`nDictionary randomized and saved to: " -n; Write-Host -f yellow "$outputFile`n"; return}
-
-# ----------------------------- End of Dicschonary -----------------------------
 
 # Function to preserve case-sensitivity.
 function getcasingmetadata {param($word); return ($word.ToCharArray() | ForEach-Object {if ($_ -cmatch '[A-Z]') {'1'} else {'0'}}) -join ''}
