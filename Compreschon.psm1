@@ -1,4 +1,4 @@
-function compresch ([string]$inputFile, [string]$alternatedictionary, [string]$mode, [switch]$help) {# Customizable compression/compreschion mechanism.
+function compresch ([string]$inputFile, [string]$alternatedictionary, [string]$mode, [switch]$help) {# Customizable compreschon/decompreschon mechanism.
 # ----------------------------- Configuration ---------------------------------
 
 # Load the user configuration.
