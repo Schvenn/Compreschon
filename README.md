@@ -1,5 +1,5 @@
 # Compreschon
-PowerShell Module to encrypt and decrypt plaintext passwords using a personalized, custom pre-shared key.
+PowerShell module to encrypt and decrypt plaintext files using a personalized, custom, pre-shared key.
 
 # Overview
 
