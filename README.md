@@ -31,10 +31,27 @@ Secondly, the compreschon function will provide progress indicators as it comple
 
 The module includes a .PSD1 file for configuration. In it there are only 2 lines you need to adjust, if you so choose:
 
-	@{ModuleVersion = '1.3'
- 	RootModule = 'Compresch.psm1'
-  	PrivateData = @{minimumlength = 4
-   	dictionaryfile = 'Common.dictionary.gz'}}
+	@{RootModule = 'Compreschon.psm1'
+	ModuleVersion = '1.3'
+	GUID = 'eb90c3ff-883f-407b-b72c-fce9a4069077'
+	Author = 'Craig Plath'
+	CompanyName = 'Plath Consulting Incorporated'
+	Copyright = '© Craig Plath. All rights reserved.'
+	Description = 'PowerShell module to encrypt and decrypt plaintext files using a personalized, custom, pre-shared key.'
+	PowerShellVersion = '5.1'
+	FunctionsToExport = @('Compreschon')
+	CmdletsToExport = @()
+	VariablesToExport = @()
+	AliasesToExport = @()
+	FileList = @('Compreschon.psm1', 'Common.dictionary.gz')
+	
+	PrivateData = @{PSData = @{Tags = @('encode', 'decode', 'pre-shared key', 'powershell', 'secret', 'security')
+	LicenseUri = 'https://github.com/Schvenn/Compreschon/blob/main/LICENSE'
+	ProjectUri = 'https://github.com/Schvenn/Compreschon'
+	ReleaseNotes = 'Initial release.'}
+	
+	minimumlength = '4'
+	dictionaryfile = 'Common.dictionary.gz'}}
 
 The minimumlength value tells the compreschon function the smallest words to replace with an indexed value. The default it set to 4. Smaller values will lead to encrypted files that are larger than their original and setting a larger value, while it will likely encrypt files faster, will lead to less encrypted content, which means that the resulting file may be easier to read, even without the dictionary. So, I wouldn't reccommend using values less than 4 or greater than 6.
 
